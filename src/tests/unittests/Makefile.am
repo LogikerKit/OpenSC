@@ -16,10 +16,10 @@ endif
 
 noinst_PROGRAMS = asn1 simpletlv cachedir pkcs15filter openpgp-tool hextobin \
 	decode_ecdsa_signature check_macro_reference_loop strip_pkcs1_2_padding \
-	base64 parse_pkcs11_uri pkcs15-tlv-record pkcs11-pss-params pkcs11-pin-cache
+	base64 parse_pkcs11_uri pkcs15-tlv-record pkcs11-pss-params pkcs11-pin-cache epki-research epki-lifecycle
 TESTS = asn1 simpletlv cachedir pkcs15filter openpgp-tool hextobin \
 	decode_ecdsa_signature check_macro_reference_loop strip_pkcs1_2_padding \
-	base64 parse_pkcs11_uri pkcs15-tlv-record pkcs11-pss-params pkcs11-pin-cache
+	base64 parse_pkcs11_uri pkcs15-tlv-record pkcs11-pss-params pkcs11-pin-cache epki-research epki-lifecycle
 
 noinst_HEADERS = torture.h
 
@@ -50,6 +50,8 @@ pkcs15_tlv_record_SOURCES = pkcs15-tlv-record.c
 pkcs11_pss_params_SOURCES = pkcs11-pss-params.c
 pkcs11_pin_cache_SOURCES = pkcs11-pin-cache.c
 pkcs11_pin_cache_LDADD = $(top_builddir)/src/pkcs11/libopensc-pkcs11.la $(LDADD)
+epki_research_SOURCES = epki-research.c
+epki_lifecycle_SOURCES = epki-lifecycle.c
 
 if ENABLE_ZLIB
 noinst_PROGRAMS += compression
