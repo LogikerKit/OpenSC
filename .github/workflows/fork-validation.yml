@@ -11,6 +11,7 @@ on:
           - all
           - codeql
           - cifuzz
+          - mingw
 
 permissions:
   contents: read
@@ -112,3 +113,51 @@ jobs:
         with:
           name: cifuzz-${{ matrix.pr }}-artifacts
           path: ${{ runner.temp }}/cifuzz/out/artifacts
+
+  mingw:
+    if: inputs.check == 'all' || inputs.check == 'mingw'
+    name: MinGW PR ${{ matrix.source.pr }} (${{ matrix.target }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        target: [mingw, mingw32]
+        source:
+          - pr: 3895
+            sha: 0850642e47a80bf6a0755b3bdc7cca732a924aa7
+          - pr: 3896
+            sha: a7eef053341002eaecf7172116ff37f3bec00b0b
+          - pr: 3897
+            sha: 84b0bcb96632128bb47e0474b49e18255ca637a6
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ matrix.source.sha }}
+          fetch-depth: 0
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.sha }}
+          path: fork-ci
+          sparse-checkout: .github/setup-linux.sh
+          sparse-checkout-cone-mode: false
+          persist-credentials: false
+      - name: Verify source and apply runner setup fix
+        env:
+          EXPECTED_SHA: ${{ matrix.source.sha }}
+        run: |
+          test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
+          cp fork-ci/.github/setup-linux.sh .github/setup-linux.sh
+          git diff -- .github/setup-linux.sh
+          test "$(git diff --name-only)" = '.github/setup-linux.sh'
+      - run: .github/setup-linux.sh ${{ matrix.target }} force-install
+      - run: .github/build.sh ${{ matrix.target }}
+      - name: Upload failed build logs
+        uses: actions/upload-artifact@v7
+        if: failure()
+        with:
+          name: mingw-${{ matrix.source.pr }}-${{ matrix.target }}-logs
+          path: |
+            config.log
+            tests/*.log
+            src/tests/unittests/*.log
