@@ -12,6 +12,7 @@ on:
           - codeql
           - cifuzz
           - mingw
+          - oseid
       pr:
         description: Submitted pull request to validate
         type: choice
@@ -178,3 +179,62 @@ jobs:
             config.log
             tests/*.log
             src/tests/unittests/*.log
+
+  oseid:
+    needs: select
+    if: inputs.check == 'all' || inputs.check == 'oseid'
+    name: OsEID LibreSSL ${{ matrix.source.pr }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      LIBRESSL_VERSION: 4.2.1
+    strategy:
+      fail-fast: false
+      matrix:
+        source: ${{ fromJSON(needs.select.outputs.sources) }}
+        include:
+          - source:
+              pr: baseline
+              sha: ccfa7600f7c7ae249118d5f301e679e476a004a5
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ matrix.source.sha }}
+          fetch-depth: 0
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.sha }}
+          path: fork-ci
+          sparse-checkout: .github/test-oseid.sh
+          sparse-checkout-cone-mode: false
+          persist-credentials: false
+      - name: Verify source and apply simulator setup fix
+        env:
+          EXPECTED_SHA: ${{ matrix.source.sha }}
+        run: |
+          test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
+          cp fork-ci/.github/test-oseid.sh .github/test-oseid.sh
+          git diff -- .github/test-oseid.sh
+          test "$(git diff --name-only)" = '.github/test-oseid.sh'
+      - uses: actions/cache/restore@v6
+        with:
+          path: libressl-${{ env.LIBRESSL_VERSION }}/
+          key: libressl-${{ env.LIBRESSL_VERSION }}
+      - name: Install matching optional-feature dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y libglib2.0-dev libnss3-dev gnutls-bin libusb-dev libudev-dev flex libnss3-tools
+      - run: .github/setup-linux.sh oseid libressl
+      - run: .github/build.sh dist libressl valgrind
+      - run: .github/test-oseid.sh
+      - run: .github/test-oseid.sh valgrind
+      - name: Upload failed test logs
+        uses: actions/upload-artifact@v7
+        if: failure()
+        with:
+          name: oseid-${{ matrix.source.pr }}-logs
+          path: |
+            config.log
+            tests/*.log
+            src/tests/unittests/*.log
+            src/tests/p11test/oseid.json

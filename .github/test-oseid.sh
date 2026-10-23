@@ -28,12 +28,9 @@ sudo mv tmp/reader.conf /etc/reader.conf.d/reader.conf
 cat /etc/reader.conf.d/reader.conf
 popd
 
-# set up polkit rule to let user "runner" access PC/SC remotely for testing
-if [ ! -f "/usr/share/polkit-1/rules.d/03-polkit-pcscd.rules" ]; then
-	echo 'polkit.addRule(function(action, subject) { if ((action.id == "org.debian.pcsc-lite.access_pcsc" || action.id == "org.debian.pcsc-lite.access_card") && subject.user == "runner") { return polkit.Result.YES; } });' > /usr/share/polkit-1/rules.d/03-polkit-pcscd.rules;
-fi
-
-sudo /etc/init.d/pcscd restart
+# Run the test daemon outside the system service's home-directory sandbox.
+# The simulator library and serial endpoint are inside this checkout.
+. .github/restart-pcscd.sh
 
 # Needed for tput to not report warnings
 export TERM=xterm-256color
