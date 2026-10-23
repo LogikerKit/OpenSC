@@ -110,7 +110,7 @@ jobs:
         with:
           ref: ${{ matrix.source.sha }}
           fetch-depth: 0
-          path: source
+          path: opensc
       - uses: actions/checkout@v7
         with:
           repository: google/oss-fuzz
@@ -119,14 +119,14 @@ jobs:
       - name: Build and run fuzzers against the exact checkout
         env:
           EXPECTED_SHA: ${{ matrix.source.sha }}
-          PROJECT_SRC_PATH: ${{ github.workspace }}/source
+          PROJECT_SRC_PATH: ${{ github.workspace }}/opensc
           WORKSPACE: ${{ runner.temp }}/cifuzz
           REPOSITORY: OpenSC
           OSS_FUZZ_PROJECT_NAME: opensc
           DRY_RUN: '0'
           SANITIZER: address
         run: |
-          test "$(git -C source rev-parse HEAD)" = "$EXPECTED_SHA"
+          test "$(git -C opensc rev-parse HEAD)" = "$EXPECTED_SHA"
           mkdir -p "$WORKSPACE"
           python3 oss-fuzz/infra/cifuzz/run_cifuzz.py
       - name: Upload fuzzing artifacts
