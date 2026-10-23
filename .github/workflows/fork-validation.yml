@@ -12,14 +12,50 @@ on:
           - codeql
           - cifuzz
           - mingw
+      pr:
+        description: Submitted pull request to validate
+        type: choice
+        default: all
+        options:
+          - all
+          - '3895'
+          - '3896'
+          - '3897'
 
 permissions:
   contents: read
 
 jobs:
+  select:
+    name: Select submitted revisions
+    runs-on: ubuntu-latest
+    outputs:
+      sources: ${{ steps.select.outputs.sources }}
+    steps:
+      - id: select
+        env:
+          SELECTED_PR: ${{ inputs.pr }}
+        run: |
+          python3 - <<'PYTHON'
+          import json
+          import os
+          sources = [
+              {"pr": 3895, "branch": "fix-pkcs15-complete-tlv-records", "sha": "0850642e47a80bf6a0755b3bdc7cca732a924aa7"},
+              {"pr": 3896, "branch": "fix-pkcs11-zero-pss-hash", "sha": "a7eef053341002eaecf7172116ff37f3bec00b0b"},
+              {"pr": 3897, "branch": "rfc-epki-2130-profile", "sha": "88d8a727c9242de4af1ce3066839a1bff53817b8"},
+          ]
+          selected = os.environ["SELECTED_PR"]
+          if selected != "all":
+              sources = [source for source in sources if str(source["pr"]) == selected]
+          if not sources:
+              raise SystemExit("Unknown submitted pull request")
+          with open(os.environ["GITHUB_OUTPUT"], "a") as output:
+              output.write("sources=" + json.dumps(sources) + "\n")
+          PYTHON
   codeql:
+    needs: select
     if: inputs.check == 'all' || inputs.check == 'codeql'
-    name: CodeQL PR ${{ matrix.pr }}
+    name: CodeQL PR ${{ matrix.source.pr }}
     runs-on: ubuntu-latest
     timeout-minutes: 45
     permissions:
@@ -29,24 +65,15 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - pr: 3895
-            branch: fix-pkcs15-complete-tlv-records
-            sha: 0850642e47a80bf6a0755b3bdc7cca732a924aa7
-          - pr: 3896
-            branch: fix-pkcs11-zero-pss-hash
-            sha: a7eef053341002eaecf7172116ff37f3bec00b0b
-          - pr: 3897
-            branch: rfc-epki-2130-profile
-            sha: 84b0bcb96632128bb47e0474b49e18255ca637a6
+        source: ${{ fromJSON(needs.select.outputs.sources) }}
     steps:
       - uses: actions/checkout@v7
         with:
-          ref: ${{ matrix.sha }}
+          ref: ${{ matrix.source.sha }}
           fetch-depth: 0
       - name: Verify source revision
         env:
-          EXPECTED_SHA: ${{ matrix.sha }}
+          EXPECTED_SHA: ${{ matrix.source.sha }}
         run: test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
       - uses: github/codeql-action/init@v4.38.2
         with:
@@ -58,35 +85,30 @@ jobs:
         uses: actions/upload-artifact@v7
         if: failure()
         with:
-          name: codeql-${{ matrix.pr }}-test-logs
+          name: codeql-${{ matrix.source.pr }}-test-logs
           path: |
             tests/*.log
             src/tests/unittests/*.log
       - uses: github/codeql-action/analyze@v4.38.2
         with:
-          ref: refs/heads/${{ matrix.branch }}
-          sha: ${{ matrix.sha }}
+          ref: refs/heads/${{ matrix.source.branch }}
+          sha: ${{ matrix.source.sha }}
           category: /language:cpp
 
   cifuzz:
+    needs: select
     if: inputs.check == 'all' || inputs.check == 'cifuzz'
-    name: CIFuzz PR ${{ matrix.pr }}
+    name: CIFuzz PR ${{ matrix.source.pr }}
     runs-on: ubuntu-latest
     timeout-minutes: 45
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - pr: 3895
-            sha: 0850642e47a80bf6a0755b3bdc7cca732a924aa7
-          - pr: 3896
-            sha: a7eef053341002eaecf7172116ff37f3bec00b0b
-          - pr: 3897
-            sha: 84b0bcb96632128bb47e0474b49e18255ca637a6
+        source: ${{ fromJSON(needs.select.outputs.sources) }}
     steps:
       - uses: actions/checkout@v7
         with:
-          ref: ${{ matrix.sha }}
+          ref: ${{ matrix.source.sha }}
           fetch-depth: 0
           path: source
       - uses: actions/checkout@v7
@@ -96,7 +118,7 @@ jobs:
           path: oss-fuzz
       - name: Build and run fuzzers against the exact checkout
         env:
-          EXPECTED_SHA: ${{ matrix.sha }}
+          EXPECTED_SHA: ${{ matrix.source.sha }}
           PROJECT_SRC_PATH: ${{ github.workspace }}/source
           WORKSPACE: ${{ runner.temp }}/cifuzz
           REPOSITORY: OpenSC
@@ -111,10 +133,11 @@ jobs:
         uses: actions/upload-artifact@v7
         if: failure()
         with:
-          name: cifuzz-${{ matrix.pr }}-artifacts
+          name: cifuzz-${{ matrix.source.pr }}-artifacts
           path: ${{ runner.temp }}/cifuzz/out/artifacts
 
   mingw:
+    needs: select
     if: inputs.check == 'all' || inputs.check == 'mingw'
     name: MinGW PR ${{ matrix.source.pr }} (${{ matrix.target }})
     runs-on: ubuntu-latest
@@ -123,13 +146,7 @@ jobs:
       fail-fast: false
       matrix:
         target: [mingw, mingw32]
-        source:
-          - pr: 3895
-            sha: 0850642e47a80bf6a0755b3bdc7cca732a924aa7
-          - pr: 3896
-            sha: a7eef053341002eaecf7172116ff37f3bec00b0b
-          - pr: 3897
-            sha: 84b0bcb96632128bb47e0474b49e18255ca637a6
+        source: ${{ fromJSON(needs.select.outputs.sources) }}
     steps:
       - uses: actions/checkout@v7
         with:
