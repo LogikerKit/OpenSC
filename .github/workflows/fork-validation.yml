@@ -1,0 +1,114 @@
+name: Fork source validation
+
+on:
+  workflow_dispatch:
+    inputs:
+      check:
+        description: Validation to run for the three submitted branches
+        type: choice
+        default: all
+        options:
+          - all
+          - codeql
+          - cifuzz
+
+permissions:
+  contents: read
+
+jobs:
+  codeql:
+    if: inputs.check == 'all' || inputs.check == 'codeql'
+    name: CodeQL PR ${{ matrix.pr }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      actions: read
+      contents: read
+      security-events: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - pr: 3895
+            branch: fix-pkcs15-complete-tlv-records
+            sha: 0850642e47a80bf6a0755b3bdc7cca732a924aa7
+          - pr: 3896
+            branch: fix-pkcs11-zero-pss-hash
+            sha: a7eef053341002eaecf7172116ff37f3bec00b0b
+          - pr: 3897
+            branch: rfc-epki-2130-profile
+            sha: 84b0bcb96632128bb47e0474b49e18255ca637a6
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ matrix.sha }}
+          fetch-depth: 0
+      - name: Verify source revision
+        env:
+          EXPECTED_SHA: ${{ matrix.sha }}
+        run: test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
+      - uses: github/codeql-action/init@v4.38.2
+        with:
+          languages: cpp
+          config-file: ./.github/.codeql.yml
+      - run: .github/setup-linux.sh force-install
+      - run: .github/build.sh
+      - name: Upload failed test logs
+        uses: actions/upload-artifact@v7
+        if: failure()
+        with:
+          name: codeql-${{ matrix.pr }}-test-logs
+          path: |
+            tests/*.log
+            src/tests/unittests/*.log
+      - uses: github/codeql-action/analyze@v4.38.2
+        with:
+          ref: refs/heads/${{ matrix.branch }}
+          sha: ${{ matrix.sha }}
+          category: /language:cpp
+
+  cifuzz:
+    if: inputs.check == 'all' || inputs.check == 'cifuzz'
+    name: CIFuzz PR ${{ matrix.pr }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - pr: 3895
+            sha: 0850642e47a80bf6a0755b3bdc7cca732a924aa7
+          - pr: 3896
+            sha: a7eef053341002eaecf7172116ff37f3bec00b0b
+          - pr: 3897
+            sha: 84b0bcb96632128bb47e0474b49e18255ca637a6
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ matrix.sha }}
+          fetch-depth: 0
+          path: source
+      - uses: actions/checkout@v7
+        with:
+          repository: google/oss-fuzz
+          ref: ac54c4f21555fabcf24e19bad3213ac194ee9f85
+          path: oss-fuzz
+      - name: Build and run fuzzers against the exact checkout
+        env:
+          EXPECTED_SHA: ${{ matrix.sha }}
+          PROJECT_SRC_PATH: ${{ github.workspace }}/source
+          WORKSPACE: ${{ runner.temp }}/cifuzz
+          REPOSITORY: OpenSC
+          OSS_FUZZ_PROJECT_NAME: opensc
+          DRY_RUN: '0'
+          SANITIZER: address
+        run: |
+          test "$(git -C source rev-parse HEAD)" = "$EXPECTED_SHA"
+          mkdir -p "$WORKSPACE"
+          python3 oss-fuzz/infra/cifuzz/run_cifuzz.py
+      - name: Upload fuzzing artifacts
+        uses: actions/upload-artifact@v7
+        if: failure()
+        with:
+          name: cifuzz-${{ matrix.pr }}-artifacts
+          path: ${{ runner.temp }}/cifuzz/out/artifacts
