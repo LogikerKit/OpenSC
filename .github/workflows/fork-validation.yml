@@ -12,6 +12,7 @@ on:
           - codeql
           - cifuzz
           - mingw
+          - mingw-retry
           - oseid
       pr:
         description: Submitted pull request to validate
@@ -179,6 +180,82 @@ jobs:
           cp fork-ci/.github/setup-linux.sh .github/setup-linux.sh
           git diff -- .github/setup-linux.sh
           test "$(git diff --name-only)" = '.github/setup-linux.sh'
+      - run: .github/setup-linux.sh ${{ matrix.target }} force-install
+      - run: .github/build.sh ${{ matrix.target }}
+      - name: Upload failed build logs
+        uses: actions/upload-artifact@v7
+        if: failure()
+        with:
+          name: mingw-${{ matrix.source.pr }}-${{ matrix.target }}-logs
+          path: |
+            config.log
+            tests/*.log
+            src/tests/unittests/*.log
+
+  mingw-retry:
+    needs: select
+    if: inputs.check == 'mingw-retry'
+    name: MinGW mirror retry PR ${{ matrix.source.pr }} (${{ matrix.target }})
+    # Ubuntu26 pairs GCC13 with MinGW-w64 v13 headers whose printf aliases
+    # trigger incorrect builtin format diagnostics. Keep the stable toolchain.
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: mingw32
+            source:
+              pr: 3895
+              sha: 0850642e47a80bf6a0755b3bdc7cca732a924aa7
+          - target: mingw32
+            source:
+              pr: 3897
+              sha: 88d8a727c9242de4af1ce3066839a1bff53817b8
+          - target: mingw
+            source:
+              pr: 3897
+              sha: 88d8a727c9242de4af1ce3066839a1bff53817b8
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ matrix.source.sha }}
+          fetch-depth: 0
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.sha }}
+          path: fork-ci
+          sparse-checkout: .github/setup-linux.sh
+          sparse-checkout-cone-mode: false
+          persist-credentials: false
+      - name: Verify source and apply runner setup fix
+        env:
+          EXPECTED_SHA: ${{ matrix.source.sha }}
+        run: |
+          test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
+          cp fork-ci/.github/setup-linux.sh .github/setup-linux.sh
+          git diff -- .github/setup-linux.sh
+          test "$(git diff --name-only)" = '.github/setup-linux.sh'
+      - name: Use the primary Ubuntu package mirror
+        run: |
+          sudo python3 - <<'PYTHON'
+          from pathlib import Path
+          replaced = 0
+          for path in (Path("/etc/apt/sources.list"), Path("/etc/apt/sources.list.d/ubuntu.sources")):
+              if not path.is_file():
+                  continue
+              before = path.read_text()
+              after = before.replace("http://azure.archive.ubuntu.com/ubuntu", "https://archive.ubuntu.com/ubuntu")
+              after = after.replace("https://azure.archive.ubuntu.com/ubuntu", "https://archive.ubuntu.com/ubuntu")
+              if before != after:
+                  path.write_text(after)
+                  replaced += 1
+                  print("Changed Ubuntu mirror in", path)
+          if not replaced:
+              raise SystemExit("Expected Azure Ubuntu mirror was not found")
+          Path("/etc/apt/apt.conf.d/99-ci-downloads").write_text(
+              'Acquire::Retries "2";\nAcquire::http::Timeout "30";\nAcquire::https::Timeout "30";\n')
+          PYTHON
       - run: .github/setup-linux.sh ${{ matrix.target }} force-install
       - run: .github/build.sh ${{ matrix.target }}
       - name: Upload failed build logs
