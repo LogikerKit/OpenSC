@@ -44,7 +44,7 @@ jobs:
           sources = [
               {"pr": 3895, "branch": "fix-pkcs15-complete-tlv-records", "sha": "0850642e47a80bf6a0755b3bdc7cca732a924aa7"},
               {"pr": 3896, "branch": "fix-pkcs11-zero-pss-hash", "sha": "a7eef053341002eaecf7172116ff37f3bec00b0b"},
-              {"pr": 3897, "branch": "rfc-epki-2130-profile", "sha": "88d8a727c9242de4af1ce3066839a1bff53817b8"},
+              {"pr": 3897, "branch": "rfc-epki-2130-profile", "sha": "cd0838543e09c9ae68f4f9f8dca13b7930556358"},
           ]
           selected = os.environ["SELECTED_PR"]
           if selected != "all":
@@ -211,11 +211,11 @@ jobs:
           - target: mingw32
             source:
               pr: 3897
-              sha: 88d8a727c9242de4af1ce3066839a1bff53817b8
+              sha: cd0838543e09c9ae68f4f9f8dca13b7930556358
           - target: mingw
             source:
               pr: 3897
-              sha: 88d8a727c9242de4af1ce3066839a1bff53817b8
+              sha: cd0838543e09c9ae68f4f9f8dca13b7930556358
     steps:
       - uses: actions/checkout@v7
         with:
