@@ -10,6 +10,7 @@ on:
 
 jobs:
   stale:
+    if: github.repository == 'OpenSC/OpenSC'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/stale@v11

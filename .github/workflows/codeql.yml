@@ -12,6 +12,7 @@ on:
 permissions: {}
 jobs:
   analyze:
+    if: github.event_name != 'schedule' || github.repository == 'OpenSC/OpenSC'
     name: Analyze
     runs-on: ubuntu-latest
     permissions:
