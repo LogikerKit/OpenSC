@@ -6,7 +6,7 @@ EXTRA_DIST = Makefile.mak versioninfo-pkcs11.rc versioninfo-pkcs11-spy.rc opensc
 if ENABLE_SHARED
 lib_LTLIBRARIES = opensc-pkcs11.la pkcs11-spy.la
 if ENABLE_CMOCKA
-# Unit tests also need the unexported session/login helpers.
+# Unit tests also exercise internal PKCS#11 helpers.
 noinst_LTLIBRARIES = libopensc-pkcs11.la
 endif
 else
