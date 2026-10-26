@@ -27,13 +27,14 @@
 #include <stdio.h>
 #include <ctype.h>
 
-#include "cardctl.h"
-#include "internal.h"
-#include "pkcs15.h"
 #include "asn1.h"
-#include "common/libscdl.h"
+#include "cardctl.h"
 #include "common/compat_strlcat.h"
 #include "common/compat_strlcpy.h"
+#include "common/libscdl.h"
+#include "internal.h"
+#include "pkcs15.h"
+#include "simpletlv.h"
 
 #ifdef ENABLE_OPENSSL
 #include <openssl/sha.h>
@@ -2616,35 +2617,48 @@ sc_pkcs15_read_file(struct sc_pkcs15_card *p15card, const struct sc_path *in_pat
 
 		if (file->ef_structure == SC_FILE_EF_LINEAR_VARIABLE_TLV) {
 			unsigned int i;
-			size_t l, record_len;
-			unsigned char *head = data;
+			size_t used = 0, record_len;
+			u8 record[256], tag;
+			const u8 *value;
 
-			for (i=1; ; i++) {
-				l = len - (head - data);
-				if (l > 256) {
-					l = 256;
-				}
-				r = sc_read_record(p15card->card, i, 0, head, l, SC_RECORD_BY_REC_NR);
+			for (i = 1;; i++) {
+				/* The aggregate size counts values, not record headers. */
+				r = sc_read_record(p15card->card, i, 0, record, sizeof(record), SC_RECORD_BY_REC_NR);
 				if (r == SC_ERROR_RECORD_NOT_FOUND)
 					break;
 				if (r < 0) {
 					goto fail_unlock;
 				}
-				if (r < 2)
+				if (r == 0)
 					break;
-				record_len = head[1];
-				if (record_len != 0xff) {
-					memmove(head, head+2, r-2);
-					head += (r-2);
+				if ((size_t)r > sizeof(record)) {
+					r = SC_ERROR_INVALID_ASN1_OBJECT;
+					goto fail_unlock;
 				}
-				else {
-					if (r < 4)
-						break;
-					memmove(head, head+4, r-4);
-					head += (r-4);
+				if (r >= 4 && record[1] == 0xff) {
+					/* The shared parser uses little-endian extended lengths;
+					 * normalize the record's big-endian length first. */
+					u8 tmp = record[2];
+					record[2] = record[3];
+					record[3] = tmp;
 				}
+				value = record;
+				r = sc_simpletlv_read_tag(&value, (size_t)r, &tag, &record_len);
+				if (r != SC_SUCCESS || record_len > len - used) {
+					r = SC_ERROR_INVALID_ASN1_OBJECT;
+					goto fail_unlock;
+				}
+				/* Copy only the complete value, ignoring trailing padding. */
+				memcpy(data + used, value, record_len);
+				used += record_len;
 			}
-			len = head-data;
+			len = used;
+			if (len > 0) {
+				unsigned char *tmp = realloc(data, len);
+
+				if (tmp != NULL)
+					data = tmp;
+			}
 		}
 		else if (file->ef_structure == SC_FILE_EF_LINEAR_VARIABLE) {
 			r = sc_read_record(p15card->card, in_path->index, (unsigned)offset, data, len, SC_RECORD_BY_REC_NR);
