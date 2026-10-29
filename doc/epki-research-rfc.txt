@@ -185,7 +185,8 @@ historical research and is not part of this driver proposal.
 
 Validation
 
-The current offline suite includes 19 unit programs. The ePKI programs
+With OpenSSL and zlib enabled, the combined branch includes 20 offline
+unit programs, including the atomic PIN-cache regression. The ePKI programs
 cover 41 driver cases and ten lifecycle cases. Two generic PKCS#11 programs
 exercise the production object-search API (four groups) and public-discovery
 transaction handling (six groups) with synthetic objects and callbacks.
