@@ -1,6 +1,6 @@
 /*
- * PKCS#11 RSA-PSS parameter validation, shared by operation initialization
- * and hardware-independent unit tests.
+ * PKCS#11 RSA-PSS parameter validation, shared by signing initialization,
+ * software verification and hardware-independent unit tests.
  *
  * Extracted from framework-pkcs15.c:
  * Copyright (C) 2002 Timo Teräs <timo.teras@iki.fi>
@@ -11,7 +11,7 @@
 
 #include "pkcs11.h"
 
-/* Validate the mechanism-level parameters before any signing operation.
+/* Validate the mechanism-level RSA-PSS parameters.
  * Salt-length bounds depend on the key and padding implementation.
  */
 static inline CK_RV
