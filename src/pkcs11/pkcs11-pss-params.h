@@ -18,8 +18,9 @@ static inline CK_RV
 sc_pkcs11_validate_pss_params(CK_MECHANISM_PTR pMechanism)
 {
 	const CK_RSA_PKCS_PSS_PARAMS *pss_params;
-	unsigned int expected_hash = 0, i;
-	const unsigned int hashes[5] = {CKM_SHA_1, CKM_SHA256,
+	CK_MECHANISM_TYPE expected_hash = 0;
+	unsigned int i;
+	const CK_MECHANISM_TYPE hashes[5] = {CKM_SHA_1, CKM_SHA256,
 			CKM_SHA384, CKM_SHA512, CKM_SHA224};
 
 	if (pMechanism == NULL_PTR)
