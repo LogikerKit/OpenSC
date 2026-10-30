@@ -2566,7 +2566,11 @@ sc_pkcs15_read_file(struct sc_pkcs15_card *p15card, const struct sc_path *in_pat
 		/* Handle the case where the ASN.1 Path object specified
 		 * index and length values */
 
-		if (file->ef_structure == SC_FILE_EF_LINEAR_VARIABLE) {
+		if (file->ef_structure == SC_FILE_EF_LINEAR_VARIABLE_TLV && in_path->count < 0) {
+			/* Some record EFs report less than the aggregate value length.
+			 * Use a bounded capacity when the Path does not specify a length. */
+			len = MAX_FILE_SIZE;
+		} else if (file->ef_structure == SC_FILE_EF_LINEAR_VARIABLE) {
 
 			// in_path->index: record_no
 			// in_path->count: ignored!

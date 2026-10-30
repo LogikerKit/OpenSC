@@ -13,10 +13,11 @@ static const u8 pin[] = {
 		0xa1, 0x18, 0x30, 0x16, 0x03, 0x02, 0x02, 0xcc, 0x0a,
 		0x01, 0x01, 0x02, 0x01, 0x04, 0x02, 0x01, 0x08, 0x02,
 		0x01, 0x08, 0x80, 0x01, 0x01, 0x04, 0x01, 0xff};
-static u8 records[3][604];
+#define MAX_TEST_VALUE_LENGTH (MAX_FILE_SIZE / 2 + 1)
+static u8 records[3][MAX_TEST_VALUE_LENGTH + 4];
 static size_t record_sizes[3], advertised_size, read_offset;
 static unsigned record_calls, max_records, continuation_calls;
-static int generated_records, read_error, continuation_error;
+static int generated_records, read_error, continuation_error, path_count;
 
 static int
 mock_select_file(sc_card_t *card, const sc_path_t *path, sc_file_t **out)
@@ -87,6 +88,7 @@ reset_records(void)
 	generated_records = 0;
 	read_error = 0;
 	continuation_error = 0;
+	path_count = -1;
 	for (unsigned i = 0; i < max_records; i++) {
 		records[i][0] = (u8)(i + 1);
 		records[i][1] = sizeof(pin);
@@ -132,7 +134,7 @@ read_fixture_with_transport(u8 **out, size_t *len,
 	card.ops = &card_ops;
 	card.ctx = &ctx;
 	p15.card = &card;
-	path.count = -1;
+	path.count = path_count;
 	return sc_pkcs15_read_file(&p15, &path, out, len, 0);
 }
 static int
@@ -141,7 +143,7 @@ read_fixture(u8 **out, size_t *len)
 	return read_fixture_with_transport(out, len, NULL);
 }
 static void
-complete_values_without_counting_headers(void **state)
+check_complete_pin_records(size_t file_size)
 {
 	int r;
 	u8 *out = NULL;
@@ -152,6 +154,7 @@ complete_values_without_counting_headers(void **state)
 	sc_pkcs15_card_t p15 = {0};
 	sc_file_t app = {0};
 	reset_records();
+	advertised_size = file_size;
 	r = read_fixture(&out, &len);
 	assert_int_equal(r, SC_SUCCESS);
 	assert_int_equal(len, 3 * sizeof(pin));
@@ -173,6 +176,16 @@ complete_values_without_counting_headers(void **state)
 	}
 	assert_int_equal(len, 0);
 	free(out);
+}
+static void
+complete_values_without_counting_headers(void **state)
+{
+	check_complete_pin_records(3 * sizeof(pin));
+}
+static void
+complete_values_beyond_reported_size(void **state)
+{
+	check_complete_pin_records(40);
 }
 static void
 check_padded_records(size_t header_len)
@@ -358,23 +371,63 @@ complete_maximum_record_file(void **state)
 	free(out);
 }
 static void
-reject_values_exceeding_file_size(void **state)
+honor_explicit_count(void **state)
 {
 	int r;
 	u8 *out = NULL;
 	size_t len = 0;
 	reset_records();
-	advertised_size--;
+	path_count = (int)advertised_size;
+	r = read_fixture(&out, &len);
+	assert_int_equal(r, SC_SUCCESS);
+	assert_int_equal(len, 3 * sizeof(pin));
+	free(out);
+	out = NULL;
+	reset_records();
+	path_count = (int)advertised_size - 1;
 	r = read_fixture(&out, &len);
 	assert_int_equal(r, SC_ERROR_INVALID_TLV_OBJECT);
 	assert_null(out);
 	set_long_record();
-	advertised_size = 599;
+	path_count = 599;
 	r = read_fixture(&out, &len);
 	assert_int_equal(r, SC_ERROR_INVALID_TLV_OBJECT);
 	assert_int_equal(record_calls, 1);
 	assert_int_equal(continuation_calls, 0);
 	assert_null(out);
+}
+static void
+bound_aggregate_without_reported_size(void **state)
+{
+	for (unsigned overflow = 0; overflow <= 1; overflow++) {
+		u8 *out = NULL;
+		size_t len = 0;
+		int r;
+		reset_records();
+		advertised_size = 0;
+		max_records = 2;
+		for (unsigned i = 0; i < max_records; i++) {
+			size_t value_len = MAX_TEST_VALUE_LENGTH - (i == 1 && !overflow);
+			records[i][1] = 0xff;
+			records[i][2] = (u8)(value_len >> 8);
+			records[i][3] = (u8)value_len;
+			memset(records[i] + 4, 0xa5, value_len);
+			record_sizes[i] = value_len + 4;
+		}
+		r = read_fixture(&out, &len);
+		if (overflow) {
+			assert_int_equal(r, SC_ERROR_INVALID_TLV_OBJECT);
+			assert_int_equal(record_calls, 2);
+			assert_null(out);
+		} else {
+			assert_int_equal(r, SC_SUCCESS);
+			assert_int_equal(len, MAX_FILE_SIZE);
+			assert_int_equal(record_calls, 3);
+			for (size_t i = 0; i < len; i++)
+				assert_int_equal(out[i], 0xa5);
+			free(out);
+		}
+	}
 }
 
 static unsigned apdu_calls, expected_record;
@@ -450,6 +503,7 @@ main(void)
 {
 	const struct CMUnitTest tests[] = {
 			cmocka_unit_test(complete_values_without_counting_headers),
+			cmocka_unit_test(complete_values_beyond_reported_size),
 			cmocka_unit_test(complete_padded_short_records),
 			cmocka_unit_test(complete_padded_extended_records),
 			cmocka_unit_test(reject_incomplete_record),
@@ -458,7 +512,8 @@ main(void)
 			cmocka_unit_test(reject_truncated_long_record),
 			cmocka_unit_test(propagate_continuation_error),
 			cmocka_unit_test(complete_maximum_record_file),
-			cmocka_unit_test(reject_values_exceeding_file_size),
+			cmocka_unit_test(honor_explicit_count),
+			cmocka_unit_test(bound_aggregate_without_reported_size),
 			cmocka_unit_test(iso_record_number_boundary),
 			cmocka_unit_test(propagate_read_error)};
 	return cmocka_run_group_tests(tests, NULL, NULL);
