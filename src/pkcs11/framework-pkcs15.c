@@ -39,7 +39,6 @@
 #define SHA_DIGEST_LENGTH	20
 #endif
 
-#include "pkcs11-pss-params.h"
 #include "sc-pkcs11.h"
 #ifdef USE_PKCS15_INIT
 #include "pkcs15init/pkcs15-init.h"
@@ -4821,10 +4820,9 @@ pkcs15_prkey_can_do(struct sc_pkcs11_session *session, void *obj,
 	LOG_FUNC_RETURN(context, CKR_OK);
 }
 
-
 static CK_RV
-pkcs15_prkey_init_params(struct sc_pkcs11_session *session,
-			CK_MECHANISM_PTR pMechanism)
+pkcs15_key_init_params(struct sc_pkcs11_session *session,
+		CK_MECHANISM_PTR pMechanism)
 {
 	const CK_RSA_PKCS_OAEP_PARAMS *oaep_params;
 
@@ -4861,20 +4859,20 @@ pkcs15_prkey_init_params(struct sc_pkcs11_session *session,
 }
 
 struct sc_pkcs11_object_ops pkcs15_prkey_ops = {
-	pkcs15_prkey_release,
-	pkcs15_prkey_set_attribute,
-	pkcs15_prkey_get_attribute,
-	sc_pkcs11_any_cmp_attribute,
-	pkcs15_any_destroy,
-	NULL,	/* get_size */
-	pkcs15_prkey_sign,
-	pkcs15_prkey_unwrap,
-	pkcs15_prkey_decrypt,
-	NULL,	/* encrypt */
-	pkcs15_prkey_derive,
-	pkcs15_prkey_can_do,
-	pkcs15_prkey_init_params,
-	NULL	/* wrap_key */
+		pkcs15_prkey_release,
+		pkcs15_prkey_set_attribute,
+		pkcs15_prkey_get_attribute,
+		sc_pkcs11_any_cmp_attribute,
+		pkcs15_any_destroy,
+		NULL, /* get_size */
+		pkcs15_prkey_sign,
+		pkcs15_prkey_unwrap,
+		pkcs15_prkey_decrypt,
+		NULL, /* encrypt */
+		pkcs15_prkey_derive,
+		pkcs15_prkey_can_do,
+		pkcs15_key_init_params,
+		NULL /* wrap_key */
 };
 
 /*
@@ -5118,22 +5116,21 @@ pkcs15_pubkey_get_attribute(struct sc_pkcs11_session *session, void *object, CK_
 }
 
 struct sc_pkcs11_object_ops pkcs15_pubkey_ops = {
-	pkcs15_pubkey_release,
-	pkcs15_pubkey_set_attribute,
-	pkcs15_pubkey_get_attribute,
-	sc_pkcs11_any_cmp_attribute,
-	pkcs15_any_destroy,
-	NULL,	/* get_size */
-	NULL,	/* sign */
-	NULL,	/* unwrap_key */
-	NULL,	/* decrypt */
-	NULL,	/* ecrypt */
-	NULL,	/* derive */
-	NULL,	/* can_do */
-	NULL,	/* init_params */
-	NULL	/* wrap_key */
+		pkcs15_pubkey_release,
+		pkcs15_pubkey_set_attribute,
+		pkcs15_pubkey_get_attribute,
+		sc_pkcs11_any_cmp_attribute,
+		pkcs15_any_destroy,
+		NULL,			/* get_size */
+		NULL,			/* sign */
+		NULL,			/* unwrap_key */
+		NULL,			/* decrypt */
+		NULL,			/* ecrypt */
+		NULL,			/* derive */
+		NULL,			/* can_do */
+		pkcs15_key_init_params, /* init_params */
+		NULL			/* wrap_key */
 };
-
 
 /* PKCS#15 Data Object*/
 static void

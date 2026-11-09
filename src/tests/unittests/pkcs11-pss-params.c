@@ -6,8 +6,72 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#include "pkcs11/pkcs11-pss-params.h"
+#include "pkcs11/mechanism.c"
 #include "torture.h"
+
+/* These parameter tests must not invoke unrelated mechanism operations. */
+struct sc_context *context = NULL;
+
+CK_RV
+session_start_operation(struct sc_pkcs11_session *session, int operation_type,
+		sc_pkcs11_mechanism_type_t *type, struct sc_pkcs11_operation **operation)
+{
+	(void)session;
+	(void)operation_type;
+	(void)type;
+	(void)operation;
+	fail_msg("Parameter validation must not start session operations");
+	return CKR_GENERAL_ERROR;
+}
+
+CK_RV
+session_get_operation(struct sc_pkcs11_session *session, int operation_type,
+		struct sc_pkcs11_operation **operation)
+{
+	(void)session;
+	(void)operation_type;
+	(void)operation;
+	fail_msg("Parameter validation must not get session operations");
+	return CKR_GENERAL_ERROR;
+}
+
+CK_RV
+session_stop_operation(struct sc_pkcs11_session *session, int operation_type)
+{
+	(void)session;
+	(void)operation_type;
+	fail_msg("Parameter validation must not stop session operations");
+	return CKR_GENERAL_ERROR;
+}
+
+#ifdef ENABLE_OPENSSL
+void
+sc_pkcs11_register_openssl_mechanisms(struct sc_pkcs11_card *card)
+{
+	(void)card;
+	fail_msg("Parameter validation must not register OpenSSL mechanisms");
+}
+
+CK_RV
+sc_pkcs11_verify_data(const CK_BYTE_PTR pubkey, CK_ULONG pubkey_len,
+		const CK_BYTE_PTR pubkey_params, CK_ULONG pubkey_params_len,
+		CK_MECHANISM_PTR mech, sc_pkcs11_operation_t *md,
+		CK_BYTE_PTR inp, CK_ULONG inp_len, CK_BYTE_PTR signat, CK_ULONG signat_len)
+{
+	(void)pubkey;
+	(void)pubkey_len;
+	(void)pubkey_params;
+	(void)pubkey_params_len;
+	(void)mech;
+	(void)md;
+	(void)inp;
+	(void)inp_len;
+	(void)signat;
+	(void)signat_len;
+	fail_msg("Parameter validation must not verify signatures");
+	return CKR_GENERAL_ERROR;
+}
+#endif
 
 static const struct {
 	CK_MECHANISM_TYPE hash;
