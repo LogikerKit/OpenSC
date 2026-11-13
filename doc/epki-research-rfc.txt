@@ -23,7 +23,8 @@ PKCS#1 v1.5 uses card padding. A separate raw-RSA opt-in uses OpenSC software
 PSS encoding and the card's raw signature operation; native PSS is not
 advertised. A separate enable_local_decryption opt-in adds RSA-2048
 PKCS#1 v1.5/OAEP decryption through OpenSC's existing software unpadding.
-Public-key encryption remains host-side; no RSA C_Encrypt is added.
+When built with OpenSSL, the generic PKCS#11 layer performs public-key RSA
+encryption in software; this profile adds no on-card encryption operation.
 An independent enable_local_pin_change opt-in adds the ordinary PIN-reference-1
 change candidate described below. Other sizes/PIN roles, unblock, key generation
 and other card writes remain unsupported. Decryption is refused while debug
