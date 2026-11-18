@@ -185,7 +185,7 @@ historical research and is not part of this driver proposal.
 
 Validation
 
-With OpenSSL and zlib enabled, the combined branch includes 20 offline
+With OpenSSL and zlib enabled, the combined branch includes 21 offline
 unit programs, including the atomic PIN-cache regression. The ePKI programs
 cover 41 driver cases and ten lifecycle cases. Two generic PKCS#11 programs
 exercise the production object-search API (four groups) and public-discovery
@@ -198,6 +198,12 @@ They require no card, PIN or module initialization. After configuring with
 For just the shared-code regressions:
 
     make -C src/tests/unittests check TESTS='pkcs11-find-objects pkcs11-discovery'
+
+On 18 November 2026, the combined branch was merged with OpenSC master
+4dc5873f7149c11eaded35843a6d9fbf512bbf07, including the upstream RSA-PSS
+parameter validation from PR #3896. Strict Linux builds passed all 21
+offline unit programs with OpenSSL and all 20 without OpenSSL. The ePKI
+driver and lifecycle regressions were retained; no physical card was used.
 
 The dated results below describe earlier revisions, not a new hardware run.
 
