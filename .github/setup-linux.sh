@@ -74,7 +74,7 @@ if [ "$1" == "mingw" -o "$1" == "mingw32" -o "$1" == "ix86" ]; then
 		set -o pipefail
 		dpkg-query -W -f='${binary:Package} ${db:Status-Abbrev}\n' |
 			awk '$2 ~ /^.i/ && ($1 ~ /^(libmono|moby|mono|php)/ ||
-			    $1 ~ /^(libgdiplus|libpcre2-posix3|libzip4)(:.*)?$/) { print $1 }'
+			    $1 ~ /^(libgdiplus|libpcre2-posix[0-9]+|libzip[0-9]+)(:.*)?$/) { print $1 }'
 	)
 	if [ -n "$PACKAGES_TO_PURGE" ]; then
 		$SUDO apt-get purge -yqq $PACKAGES_TO_PURGE

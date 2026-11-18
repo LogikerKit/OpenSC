@@ -1,6 +1,6 @@
 MAINTAINERCLEANFILES = $(srcdir)/Makefile.in
 
-EXTRA_DIST = softhsm_2.6.1_ref.json softhsm_2.7.0_ref.json softhsm_fips_ref.json softhsm_libressl_ref.json
+EXTRA_DIST = softhsm_2.6.1_ref.json softhsm_2.7.0_ref.json softhsm_fips_ref.json softhsm_libressl_ref.json freehsm_ref.json
 
 TEST_EXTENSIONS = .sh
 # This pushes the valgrind command to the test environment
@@ -27,6 +27,7 @@ dist_noinst_SCRIPTS = common.sh \
                       init-softhsm.sh \
                       init-softokn.sh \
                       init-kryoptic.sh \
+                      init-freehsm.sh \
                       test-manpage.sh \
                       test-duplicate-symbols.sh \
                       test-fuzzing.sh \
@@ -39,7 +40,8 @@ dist_noinst_SCRIPTS = common.sh \
                       test-pkcs11-tool-unwrap-wrap-test.sh \
                       test-pkcs11-tool-import.sh \
                       test-pkcs11-tool-uri-with-slot-id.sh \
-                      test-pkcs11-tool-kem.sh
+                      test-pkcs11-tool-kem.sh \
+                      test-pkcs11-tool-attributes.sh
 
 .NOTPARALLEL:
 TESTS = \
@@ -48,7 +50,8 @@ TESTS = \
         test-pkcs11-tool-test-threads.sh \
         test-pkcs11-tool-allowed-mechanisms.sh \
         test-pkcs11-tool-sym-crypt-test.sh \
-        test-pkcs11-tool-kem.sh
+        test-pkcs11-tool-kem.sh \
+        test-pkcs11-tool-attributes.sh
 if ENABLE_OPENSSL
 TESTS += \
         test-pkcs11-tool-test.sh \

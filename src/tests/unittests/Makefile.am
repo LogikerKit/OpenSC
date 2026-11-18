@@ -1,5 +1,6 @@
 MAINTAINERCLEANFILES = $(srcdir)/Makefile.in
 EXTRA_DIST = Makefile.mak
+CLEANFILES = scconf-test.conf
 
 if ENABLE_CMOCKA
 include $(top_srcdir)/aminclude_static.am
@@ -16,11 +17,11 @@ endif
 
 noinst_PROGRAMS = asn1 simpletlv cachedir pkcs15filter openpgp-tool hextobin \
 	decode_ecdsa_signature check_macro_reference_loop strip_pkcs1_2_padding \
-	base64 parse_pkcs11_uri pkcs15-tlv-record pkcs11-pss-params pkcs11-pin-cache \
+	base64 parse_pkcs11_uri scconf pkcs15-tlv-record pkcs11-pss-params pkcs11-pin-cache \
 	epki-research epki-lifecycle pkcs11-find-objects pkcs11-discovery
 TESTS = asn1 simpletlv cachedir pkcs15filter openpgp-tool hextobin \
 	decode_ecdsa_signature check_macro_reference_loop strip_pkcs1_2_padding \
-	base64 parse_pkcs11_uri pkcs15-tlv-record pkcs11-pss-params pkcs11-pin-cache \
+	base64 parse_pkcs11_uri scconf pkcs15-tlv-record pkcs11-pss-params pkcs11-pin-cache \
 	epki-research epki-lifecycle pkcs11-find-objects pkcs11-discovery
 
 noinst_HEADERS = torture.h
@@ -48,6 +49,7 @@ check_macro_reference_loop_SOURCES = check_macro_reference_loop.c
 strip_pkcs1_2_padding_SOURCES = strip_pkcs1_2_padding.c
 base64_SOURCES = base64.c
 parse_pkcs11_uri_SOURCES = parse_pkcs11_uri.c
+scconf_SOURCES = scconf.c
 pkcs15_tlv_record_SOURCES = pkcs15-tlv-record.c
 pkcs11_pss_params_SOURCES = pkcs11-pss-params.c
 pkcs11_pin_cache_SOURCES = pkcs11-pin-cache.c
