@@ -199,8 +199,8 @@ For just the shared-code regressions:
 
     make -C src/tests/unittests check TESTS='pkcs11-find-objects pkcs11-discovery'
 
-On 18 November 2026, the combined branch was merged with OpenSC master
-4dc5873f7149c11eaded35843a6d9fbf512bbf07, including the upstream RSA-PSS
+On 19 November 2026, the combined branch was merged with OpenSC master
+1b7dea4d5f31bb0c60640efa4cabd36f1e98b964, including the upstream RSA-PSS
 parameter validation from PR #3896. Strict Linux builds passed all 21
 offline unit programs with OpenSSL and all 20 without OpenSSL. The ePKI
 driver and lifecycle regressions were retained; no physical card was used.

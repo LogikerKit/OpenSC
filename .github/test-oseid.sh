@@ -18,7 +18,8 @@ if [ ! -d tmp ]; then
 fi
 socat -d -d pty,link=tmp/OsEIDsim.socket,raw,echo=0 "exec:build/console/console ...,pty,raw,echo=0" &
 PID=$!
-sleep 1
+sleep 5
+
 echo "# OsEIDsim" > tmp/reader.conf
 echo 'FRIENDLYNAME      "OsEIDsim"' >> tmp/reader.conf
 echo "DEVICENAME        $PWD/tmp/OsEIDsim.socket" >> tmp/reader.conf
@@ -31,6 +32,7 @@ popd
 # Run the test daemon outside the system service's home-directory sandbox.
 # The simulator library and serial endpoint are inside this checkout.
 . .github/restart-pcscd.sh
+sleep 5
 
 # Needed for tput to not report warnings
 export TERM=xterm-256color
