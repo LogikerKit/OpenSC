@@ -1,5 +1,6 @@
 /* SPDX-License-Identifier: LGPL-2.1-or-later */
 /* Synthetic record fixtures only: no card data or hardware access. */
+#include <limits.h>
 #include <stdarg.h>
 #include <stddef.h>
 #include <stdint.h>
@@ -354,21 +355,58 @@ propagate_continuation_error(void **state)
 	assert_null(out);
 }
 static void
-complete_maximum_record_file(void **state)
+check_maximum_record_file(int (*transmit)(sc_reader_t *, sc_apdu_t *))
 {
 	int r;
 	u8 *out = NULL;
+	u8 expected[254];
 	size_t len = 0;
 	reset_records();
 	generated_records = 1;
 	max_records = 254;
 	advertised_size = max_records * 254;
-	r = read_fixture(&out, &len);
+	iso_record_calls = 0;
+	r = read_fixture_with_transport(&out, &len, transmit);
 	assert_int_equal(r, SC_SUCCESS);
-	assert_int_equal(record_calls, 255);
+	assert_int_equal(transmit == NULL ? record_calls : iso_record_calls, 254);
 	assert_int_equal(len, 254 * 254);
 	assert_true(len <= MAX_FILE_SIZE);
+	memset(expected, 0xa5, sizeof(expected));
+	for (unsigned i = 0; i < max_records; i++)
+		assert_memory_equal(out + i * sizeof(expected), expected, sizeof(expected));
 	free(out);
+}
+
+static void
+complete_maximum_record_file(void **state)
+{
+	check_maximum_record_file(NULL);
+}
+
+static int
+mock_maximum_record_transmit(sc_reader_t *reader, sc_apdu_t *apdu)
+{
+	unsigned rec = ++iso_record_calls;
+
+	assert_true(rec <= 254);
+	assert_int_equal(apdu->ins, 0xb2);
+	assert_int_equal(apdu->p1, rec);
+	assert_int_equal(apdu->p2, 4);
+	assert_int_equal(apdu->le, 256);
+	assert_true(apdu->resplen >= 256);
+	apdu->resp[0] = (u8)rec;
+	apdu->resp[1] = 254;
+	memset(apdu->resp + 2, 0xa5, 254);
+	apdu->resplen = 256;
+	apdu->sw1 = 0x90;
+	apdu->sw2 = 0;
+	return SC_SUCCESS;
+}
+
+static void
+complete_maximum_record_file_iso(void **state)
+{
+	check_maximum_record_file(mock_maximum_record_transmit);
 }
 static void
 honor_explicit_count(void **state)
@@ -478,12 +516,105 @@ iso_record_number_boundary(void **state)
 	assert_int_equal(apdu_calls, 2);
 	/* Reserved numbers/identifiers are rejected before an APDU is sent. */
 	r = iso->read_record(&card, 255, 0, &value, 1, SC_RECORD_BY_REC_NR);
-	assert_int_equal(r, SC_ERROR_RECORD_NOT_FOUND);
+	assert_int_equal(r, SC_ERROR_INVALID_ARGUMENTS);
 	r = iso->read_record(&card, 255, 0, &value, 1, SC_RECORD_BY_REC_ID);
-	assert_int_equal(r, SC_ERROR_RECORD_NOT_FOUND);
+	assert_int_equal(r, SC_ERROR_INVALID_ARGUMENTS);
+	r = iso->read_record(&card, 255, 256, &value, 1, SC_RECORD_BY_REC_NR);
+	assert_int_equal(r, SC_ERROR_INVALID_ARGUMENTS);
 	r = iso->read_record(&card, 256, 0, &value, 1, SC_RECORD_BY_REC_NR);
 	assert_int_equal(r, SC_ERROR_INVALID_ARGUMENTS);
+	r = iso->read_record(&card, UINT_MAX, 0, &value, 1, SC_RECORD_BY_REC_NR);
+	assert_int_equal(r, SC_ERROR_INVALID_ARGUMENTS);
 	assert_int_equal(apdu_calls, 2);
+}
+
+static unsigned expected_ins, expected_p2;
+
+static int
+mock_record_write_transmit(sc_reader_t *reader, sc_apdu_t *apdu)
+{
+	apdu_calls++;
+	assert_int_equal(apdu->ins, expected_ins);
+	assert_int_equal(apdu->p1, expected_record);
+	assert_int_equal(apdu->p2, expected_p2);
+	if (expected_ins == 0xdd)
+		fail_msg("Invalid offset record reached transport");
+	assert_int_equal(apdu->datalen, 1);
+	assert_int_equal(apdu->data[0], 0xa5);
+	apdu->resplen = 0;
+	apdu->sw1 = 0x90;
+	apdu->sw2 = 0;
+	return SC_SUCCESS;
+}
+
+static void
+check_iso_record_write_boundary(unsigned int idx, int update)
+{
+	const unsigned valid[] = {0, 254};
+	const unsigned invalid[] = {255, 256, UINT_MAX};
+	const unsigned long flags[] = {SC_RECORD_BY_REC_NR, SC_RECORD_BY_REC_ID};
+	sc_context_t ctx = {0};
+	struct sc_reader_operations reader_ops = {0};
+	sc_reader_t reader = {0};
+	sc_card_t card = {0};
+	struct sc_card_operations *iso = sc_get_iso7816_driver()->ops;
+	const u8 value = 0xa5;
+	unsigned valid_calls = 0;
+	size_t i, j;
+	int r;
+
+	reader_ops.transmit = mock_record_write_transmit;
+	reader.ops = &reader_ops;
+	reader.active_protocol = SC_PROTO_T1;
+	reader.max_send_size = 256;
+	card.reader = &reader;
+	card.ctx = &ctx;
+	card.ops = iso;
+	card.max_send_size = 256;
+	expected_ins = update ? (idx ? 0xdd : 0xdc) : 0xd2;
+	apdu_calls = 0;
+	for (j = 0; j < sizeof(flags) / sizeof(flags[0]); j++) {
+		expected_p2 = flags[j] & SC_RECORD_BY_REC_NR ? 4 : 0;
+		/* Offset coverage checks rejection before encoding or transport. */
+		if (idx == 0) {
+			for (i = 0; i < sizeof(valid) / sizeof(valid[0]); i++) {
+				expected_record = valid[i];
+				if (update)
+					r = iso->update_record(&card, valid[i], idx, &value, 1, flags[j]);
+				else
+					r = iso->write_record(&card, valid[i], &value, 1, flags[j]);
+				assert_int_equal(r, 1);
+				assert_int_equal(apdu_calls, ++valid_calls);
+			}
+		}
+		for (i = 0; i < sizeof(invalid) / sizeof(invalid[0]); i++) {
+			expected_record = invalid[i];
+			if (update)
+				r = iso->update_record(&card, invalid[i], idx, &value, 1, flags[j]);
+			else
+				r = iso->write_record(&card, invalid[i], &value, 1, flags[j]);
+			assert_int_equal(r, SC_ERROR_INVALID_ARGUMENTS);
+			assert_int_equal(apdu_calls, valid_calls);
+		}
+	}
+}
+
+static void
+iso_write_record_number_boundary(void **state)
+{
+	check_iso_record_write_boundary(0, 0);
+}
+
+static void
+iso_update_record_number_boundary(void **state)
+{
+	check_iso_record_write_boundary(0, 1);
+}
+
+static void
+iso_update_record_offset_number_boundary(void **state)
+{
+	check_iso_record_write_boundary(256, 1);
 }
 
 static void
@@ -498,6 +629,22 @@ propagate_read_error(void **state)
 	assert_int_equal(r, SC_ERROR_TRANSMIT_FAILED);
 	assert_null(out);
 }
+
+static void
+propagate_invalid_record_arguments(void **state)
+{
+	int r;
+	u8 *out = NULL;
+	size_t len = 0;
+
+	reset_records();
+	read_error = SC_ERROR_INVALID_ARGUMENTS;
+	r = read_fixture(&out, &len);
+	assert_int_equal(r, SC_ERROR_INVALID_ARGUMENTS);
+	assert_int_equal(record_calls, 1);
+	assert_null(out);
+}
+
 int
 main(void)
 {
@@ -514,7 +661,12 @@ main(void)
 			cmocka_unit_test(complete_maximum_record_file),
 			cmocka_unit_test(honor_explicit_count),
 			cmocka_unit_test(bound_aggregate_without_reported_size),
+			cmocka_unit_test(complete_maximum_record_file_iso),
 			cmocka_unit_test(iso_record_number_boundary),
-			cmocka_unit_test(propagate_read_error)};
+			cmocka_unit_test(iso_write_record_number_boundary),
+			cmocka_unit_test(iso_update_record_number_boundary),
+			cmocka_unit_test(iso_update_record_offset_number_boundary),
+			cmocka_unit_test(propagate_read_error),
+			cmocka_unit_test(propagate_invalid_record_arguments)};
 	return cmocka_run_group_tests(tests, NULL, NULL);
 }
